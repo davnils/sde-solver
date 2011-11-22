@@ -6,7 +6,7 @@ import Data.Random.Normal (normalsIO')
 type Rate = Double
 type Volatility = Double
 
-step :: Double -> Rate -> Volatility -> Double -> Double -> Double
+step :: Rate -> Volatility -> Double -> Double -> Double -> Double
 step rate volatility stepSize prev rand = prev * inner
 	where
 		inner = foldl (+) 0 [1, first, second, third]
