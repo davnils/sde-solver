@@ -1,4 +1,4 @@
-{-# LANGUAGE MultiParamTypeClasses, TypeSynonymInstances, FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses, TypeSynonymInstances, FlexibleInstances, BangPatterns #-}
 
 module SDE where
 
@@ -33,7 +33,8 @@ solve sde getRng seed = do
         sum <- foldM (step' super) 0 [1..simulations]
         return $ sum / realToFrac simulations
         where
-        step' super acc _ = do 
+        step' super !acc _ = do
+                -- TODO: Use another way of generating local seeds.
                 local <- getRand super >>= getRng . floor . (*1000)
                 (+acc) <$> evalValue sde local
         (_, _, simulations) = config sde
