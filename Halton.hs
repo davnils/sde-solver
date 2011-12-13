@@ -4,8 +4,8 @@ type Prime = Int
 data HaltonGen = HG [Prime]
 
 instance RandomGen HaltonGen where
-	getRand gen = undefined
-	initialize n = return $ HG $ take n primes
+        getRand gen = undefined
+        initialize n = return $ HG $ take n primes
 
 primes :: [Prime]
 primes = [x | x <- [23,25..], isPrime x]
@@ -13,7 +13,7 @@ primes = [x | x <- [23,25..], isPrime x]
 
 boxMuller :: Double -> Double -> (Double, Double)
 boxMuller u1 u2 = (z1, z2)
-	where
+        where
         z1 = root * cos(2*pi*u2)
         z2 = root * sin(2*pi*u2)
         root = sqrt (-2 * log u1)
@@ -26,9 +26,8 @@ genHalton index base = haltonStep 0 f index
         haltonStep sum f i
                 | i <= 0 = sum
                 | otherwise = haltonStep sum' f' i'
-                        
                 where
-                sum' = sum + f * (realToFrac $ mod i base)
+                sum' = sum + f * realToFrac (mod i base)
                 f' = f / realToFrac base
                 i' = floor $ realToFrac i / realToFrac base
 
