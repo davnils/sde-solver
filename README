@@ -1,1 +1,10 @@
 Solver for stochastic differential equations. Under development.
+
+Future goals:
+
+* Cleanup with type synonyms and make it easier to use
+* Several instances of SDE for common problems
+* Support for correlation between several random vars
+* Parallel solving on a local CPU
+* Parallel solving on a cluster using MPI
+* Parallel solving on a GPU-cluster using MPI and Accelerate
