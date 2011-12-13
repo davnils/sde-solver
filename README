@@ -1,6 +1,6 @@
 Solver for stochastic differential equations. Work in progress, main branch used for active development.
 
-Compile with: ghc -O2 -fvia-C -funbox-strict-fields Main.hs
+Compile with: ghc --make -O2 -funbox-strict-fields Main.hs
 
 Future goals:
 
