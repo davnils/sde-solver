@@ -10,7 +10,7 @@ import qualified Data.Vector.Unboxed as V
 import qualified System.Random as R
 import qualified System.Random.MWC as M
 
-class Monad m => RNGGen g m where
+class (Monad m, Functor m) => RNGGen g m where
         getRand :: g -> m Double
         initialize :: Int -> m g
 
