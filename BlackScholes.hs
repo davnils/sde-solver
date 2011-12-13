@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 module BlackScholes where
 
 import Control.Applicative
@@ -10,10 +11,10 @@ import SDE
 type Rate = Double
 type Volatility = Double
 
-data BlackScholes = BS Rate Volatility Double Double TimeStep Int
+data BlackScholes = BS !Rate !Volatility !Double !Double !TimeStep !Int
 
 instance SDE BlackScholes where
-        step (BS rate volatility _ stepSize _ _) rng prev = do 
+        step (BS rate volatility _ stepSize _ _) rng !prev = do
                 rand <- getRand rng
                 let dB = rand * sqrt stepSize
                 return $ prev * pure dB
@@ -35,7 +36,6 @@ instance SDE BlackScholes where
                 f = flip lookup l
                 l = map parse . filter (even . fst) . zip [0..] $ zip l' (tail l')
                 parse = second read . snd
-                
                 -- TODO: Separate argument parsing for different purposes
 
 liftM6 :: Monad m => (a1 -> a2 -> a3 -> a4 -> a5 -> a6 -> b)
