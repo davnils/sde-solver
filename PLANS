@@ -17,7 +17,18 @@ Handlar det bara om att KÖRA ett program och ge det indata, samt hantera utdata
 class Distributed a where
 	execute :: Distributed m => a -> b -> m b
 
-data MPI
+data MPI = MPI { servers :: [String] }
+
+data Accelerate = Accelerate { gpus :: [Int] }
 
 instance Distributed MPI where
 	execute settings input = ...
+
+instance Distributed Accelerate where
+	execute settings input = ...
+
+executeSolver = do
+	let calculation = ...
+	    acc = Accelerate ...
+	    mpi = MPI ...
+	execute MPI acc
