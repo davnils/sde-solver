@@ -1,0 +1,23 @@
+Konstruera abstraktion som knyter samman MPI och Accelerate.
+
+Delade operationer:
+
+transport av indata, beräkning, mellanliggande beräkningar, transport av resultat
+
+Control.Arrow? verkar alltför begränsad.
+
+Flera instanser ska kunna kedjas för att t.ex. först sprida beräkningar över ett kluster och sedan över flera GPUer.
+Exenpel:
+
+MPI-in -> Accelerate-in -> beräkning på indata -> Accelerate-ut -> MPI-ut
+
+Kan det ses som att första input hanterar en funktion av samma typ som alla inputs och själva beräkningen?
+Handlar det bara om att KÖRA ett program och ge det indata, samt hantera utdatan?
+
+class Distributed a where
+	execute :: Distributed m => a -> b -> m b
+
+data MPI
+
+instance Distributed MPI where
+	execute settings input = ...
