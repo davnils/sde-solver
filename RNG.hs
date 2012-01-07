@@ -1,4 +1,5 @@
-{-# LANGUAGE MultiParamTypeClasses, TypeSynonymInstances, FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses, TypeSynonymInstances, FlexibleInstances,
+             TypeFamilies #-}
 
 module RNG where
 
@@ -15,6 +16,10 @@ class (Monad m, Functor m) => RNGGen g m where
         initialize :: Int -> m g
 
 instance RNGGen (M.Gen s) (ST s) where
+        getRand = M.normal
+        initialize = M.initialize . V.singleton . fromIntegral
+
+instance (M.GenIO ~ d) => RNGGen d IO where
         getRand = M.normal
         initialize = M.initialize . V.singleton . fromIntegral
 
