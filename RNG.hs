@@ -1,5 +1,5 @@
 {-# LANGUAGE MultiParamTypeClasses, TypeSynonymInstances, FlexibleInstances,
-             TypeFamilies #-}
+             TypeFamilies, IncoherentInstances #-}
 
 module RNG where
 

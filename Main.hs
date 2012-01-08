@@ -12,4 +12,4 @@ import qualified System.Random.MWC as M
 main :: IO ()
 main = do
         bs <- parseCmd <$> getArgs
-        print $ runST (solve (bs :: BlackScholes) (initialize :: Int -> ST s (M.Gen s)) 4712)
+        solve (bs :: BlackScholes) (initialize) 4712 >>= print
