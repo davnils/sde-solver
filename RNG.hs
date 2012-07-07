@@ -10,17 +10,18 @@ import Control.Monad.State
 import qualified Data.Vector.Unboxed as V
 import qualified System.Random as R
 import qualified System.Random.MWC as M
+import qualified System.Random.MWC.Distributions as MD
 
 class (Monad m, Functor m) => RNGGen g m where
         getRand :: g -> m Double
         initialize :: Int -> m g
 
 instance RNGGen (M.Gen s) (ST s) where
-        getRand = M.normal
+        getRand = MD.normal 0 1
         initialize = M.initialize . V.singleton . fromIntegral
 
 instance (M.GenIO ~ d) => RNGGen d IO where
-        getRand = M.normal
+        getRand = MD.normal 0 1
         initialize = M.initialize . V.singleton . fromIntegral
 
 data PrimitiveGen = PG Int | StdPG R.StdGen
