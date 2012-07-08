@@ -1,4 +1,5 @@
-Solver for stochastic differential equations. Work in progress, main branch used for active development.
+Solver for stochastic differential equations. Work in progress.
+The code is written with a custom haskell-unicode plugin for vim, replacing math-stuff with unicode symbols, hence partial differentials and similar might look a little unappetizing.
 
 Compile with: ghc --make -O2 -funbox-strict-fields Main.hs
 
