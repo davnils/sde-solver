@@ -13,29 +13,29 @@ import qualified System.Random.MWC as M
 import qualified System.Random.MWC.Distributions as MD
 
 class (Monad m, Functor m) => RNGGen g m where
-        getRand :: g -> m Double
-        initialize :: Int -> m g
+  getRand :: g -> m Double
+  initialize :: Int -> m g
 
 instance RNGGen (M.Gen s) (ST s) where
-        getRand = MD.normal 0 1
-        initialize = M.initialize . V.singleton . fromIntegral
+  getRand = MD.normal 0 1
+  initialize = M.initialize . V.singleton . fromIntegral
 
 instance (M.GenIO ~ d) => RNGGen d IO where
-        getRand = MD.normal 0 1
-        initialize = M.initialize . V.singleton . fromIntegral
+  getRand = MD.normal 0 1
+  initialize = M.initialize . V.singleton . fromIntegral
 
 data PrimitiveGen = PG Int | StdPG R.StdGen
-        deriving Show
+  deriving Show
 
 instance RNGGen PrimitiveGen IO where
-        getRand (PG gen) = return $ realToFrac gen + 1 -- TODO Normal-bypass
-        initialize = return . PG
+  getRand (PG gen) = return $ realToFrac gen + 1 -- TODO Normal-bypass
+  initialize = return . PG
 
 instance RNGGen PrimitiveGen (State PrimitiveGen) where
-        getRand _ = do
-                (sample, gen') <- normal . (\(StdPG g) -> g) <$> get
-                put $ StdPG gen'
-                return sample
-        initialize = return . StdPG . R.mkStdGen
+  getRand _ = do
+    (sample, gen') <- normal . (\(StdPG g) -> g) <$> get
+    put $ StdPG gen'
+    return sample
+  initialize = return . StdPG . R.mkStdGen
 
 normal = undefined
