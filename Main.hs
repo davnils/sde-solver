@@ -12,7 +12,7 @@ import System.IO
 main :: IO ()
 main = do
   -- Temporary glue
-  (start:steps:step:rate:vol:simulations:[]) <- map read <$> getArgs :: IO [Double]
-  let [steps', simulations'] = map floor [steps, simulations]
-  rng <- initialize 4712
+  (start:steps:step:rate:vol:simulations:seed:[]) <- map read <$> getArgs :: IO [Double]
+  let [steps', simulations', seed'] = map floor [steps, simulations, seed]
+  rng <- initialize seed'
   evaluate [Local] (BS rate vol, EulerMaruyama, rng, Steps steps', start, step, simulations') >>= print

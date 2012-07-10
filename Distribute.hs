@@ -1,4 +1,4 @@
-{-# LANGUAGE MultiParamTypeClasses, ConstraintKinds #-}
+{-# LANGUAGE MultiParamTypeClasses, ConstraintKinds, BangPatterns #-}
 module Distribute where
 
 -- TODO: (1) Fix t_i
@@ -6,6 +6,7 @@ module Distribute where
 
 import Control.Applicative
 import Control.Monad.Identity
+import Data.List
 import Prelude hiding (sum)
 import RNG
 import SDE
@@ -38,16 +39,16 @@ instance Distribute MPICluster IO where
 
 instance Distribute Local IO where
   inject _ = id <$> return
-  execute _ (sde, solver, rng, accuracy, start, deltat, simulations) = 
-    Scalar <$> (mapM single [1..simulations] >>= average)
+  execute _ (!sde, !solver, !rng, !accuracy, !start, !deltat, !simulations) = 
+    Scalar <$> (mapM single [1..simulations] >>= average simulations)
     where
       f w_i _ = w_iplus1 solver sde rng undefined w_i deltat
       steps = case accuracy of
         End endTime -> floor $ endTime / deltat
         Steps n -> n
-      single _ = foldM f start [1..steps]
-      average solutions = return $ sum solutions / (realToFrac $ length solutions)
-      sum = foldl (+) 0
+      single _ = foldM' f start [1..steps]
+      average n solutions = return $ sum solutions / (realToFrac $ n)
+      sum = foldl' (+) 0
 
   remove _ = id <$> return
 
@@ -57,3 +58,9 @@ evaluate (method:[]) input =
   inject method input >>= execute method >>= remove method
 evaluate (method:tail) input =
   inject method input >>= evaluate tail >>= remove method
+
+foldM' :: (Monad m) => (a -> b -> m a) -> a -> [b] -> m a
+foldM' _ z [] = return z
+foldM' f z (x:xs) = do
+  z' <- f z x
+  z' `seq` foldM' f z' xs
