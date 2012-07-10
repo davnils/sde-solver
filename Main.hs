@@ -15,4 +15,4 @@ main = do
   (start:steps:step:rate:vol:simulations:seed:[]) <- map read <$> getArgs :: IO [Double]
   let [steps', simulations', seed'] = map floor [steps, simulations, seed]
   rng <- initialize seed'
-  evaluate [Local] (BS rate vol, EulerMaruyama, rng, Steps steps', start, step, simulations') >>= print
+  evaluate [Distr Local] (BS rate vol, EulerMaruyama, rng, Steps steps', start, step, simulations') >>= print

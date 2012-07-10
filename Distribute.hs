@@ -1,16 +1,19 @@
-{-# LANGUAGE MultiParamTypeClasses, ConstraintKinds, BangPatterns #-}
+{-# LANGUAGE MultiParamTypeClasses, ConstraintKinds, BangPatterns, ExistentialQuantification #-}
 module Distribute where
 
 -- TODO: (1) Fix t_i
 --       (2) Check if the required bottom-execution can be encoded in the type system
 
 import Control.Applicative
-import Control.Monad.Identity
+import Control.Monad.Identity hiding (mapM)
+import Control.Monad.Parallel
 import Data.List
-import Prelude hiding (sum)
+import Prelude hiding (sum, mapM)
 import RNG
 import SDE
 import SDESolver
+
+data DistributeInstance a m = forall a. Distribute a m => Distr a
 
 data SDEResult = Scalar Double 
                | NotApplicable
@@ -27,7 +30,7 @@ data Local = Local
 type SDEConstraint b c g m = (SDE b, SDESolver c, RNGGen g m)
 type SDEInstance b c g = (b, c, g, Accuracy, Double, Double, Int)
 
-class (Monad m) => Distribute a m where
+class (MonadParallel m) => Distribute a m where
   inject :: SDEConstraint b c g m => a -> SDEInstance b c g -> m (SDEInstance b c g)
   execute :: SDEConstraint b c g m =>  a -> SDEInstance b c g -> m SDEResult
   remove :: a -> SDEResult -> m SDEResult
@@ -52,14 +55,14 @@ instance Distribute Local IO where
 
   remove _ = id <$> return
 
-evaluate :: (Distribute a m,  Monad m, SDEConstraint b c g m) => [a] -> SDEInstance b c g -> m SDEResult
+evaluate :: (MonadParallel m, SDEConstraint b c g m) => [DistributeInstance a m] -> SDEInstance b c g -> m SDEResult
 evaluate [] _ = return NotApplicable
-evaluate (method:[]) input =
+evaluate ((Distr method):[]) input =
   inject method input >>= execute method >>= remove method
-evaluate (method:tail) input =
+evaluate ((Distr method):tail) input =
   inject method input >>= evaluate tail >>= remove method
 
-foldM' :: (Monad m) => (a -> b -> m a) -> a -> [b] -> m a
+foldM' :: (MonadParallel m) => (a -> b -> m a) -> a -> [b] -> m a
 foldM' _ z [] = return z
 foldM' f z (x:xs) = do
   z' <- f z x
