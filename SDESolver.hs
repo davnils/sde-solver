@@ -2,8 +2,6 @@
 
 module SDESolver where
 
-import Control.Applicative
-import Control.Monad.Identity
 import RNG
 import SDE
 

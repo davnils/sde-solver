@@ -1,4 +1,5 @@
-{-# LANGUAGE MultiParamTypeClasses, ConstraintKinds, BangPatterns, ExistentialQuantification #-}
+{-# LANGUAGE MultiParamTypeClasses, ConstraintKinds, BangPatterns,
+             ExistentialQuantification, FlexibleInstances #-}
 module Distribute where
 
 -- TODO: (1) Fix t_i
@@ -6,14 +7,14 @@ module Distribute where
 
 import Control.Applicative
 import Control.Monad.Identity hiding (mapM)
-import Control.Monad.Parallel
-import Data.List
-import Prelude hiding (sum, mapM)
+import qualified Control.Monad.Parallel as P
+import Data.List (foldl')
+import Prelude hiding (sum)
 import RNG
 import SDE
 import SDESolver
 
-data DistributeInstance a m = forall a. Distribute a m => Distr a
+data DistributeInstance m = forall a. Distribute a m => Distr a
 
 data SDEResult = Scalar Double 
                | NotApplicable
@@ -25,45 +26,46 @@ data Accuracy = End TimeStep
 
 data MPICluster = MPICluster
 data GPUAccelerate = GPUAccelerate
-data Local = Local
+data Local = Local Int
 
 type SDEConstraint b c g m = (SDE b, SDESolver c, RNGGen g m)
-type SDEInstance b c g = (b, c, g, Accuracy, Double, Double, Int)
+type SDEInstance b c g m = (b, c, Int -> m g, Accuracy, Double, Double, Int)
 
-class (MonadParallel m) => Distribute a m where
-  inject :: SDEConstraint b c g m => a -> SDEInstance b c g -> m (SDEInstance b c g)
-  execute :: SDEConstraint b c g m =>  a -> SDEInstance b c g -> m SDEResult
+class (P.MonadParallel m) => Distribute a m where
+  inject :: SDEConstraint b c g m => a -> SDEInstance b c g m -> m (SDEInstance b c g m)
+  execute :: SDEConstraint b c g m =>  a -> SDEInstance b c g m -> m SDEResult
   remove :: a -> SDEResult -> m SDEResult
 
 instance Distribute MPICluster IO where
-  inject _ input = undefined
+  inject _ _ = undefined
   execute _ _ = return NotApplicable
-  remove _ result = undefined
+  remove _ _ = undefined
 
-instance Distribute Local IO where
+instance (P.MonadParallel m) => Distribute Local m where
   inject _ = id <$> return
-  execute _ (!sde, !solver, !rng, !accuracy, !start, !deltat, !simulations) = 
-    Scalar <$> (mapM single [1..simulations] >>= average simulations)
+  execute (Local cores) (!sde, !solver, !rng, !accuracy, !start, !deltat, !simulations) = 
+    Scalar <$> (P.mapM (\r -> rng r >>= thread >>= average perThread) [1..cores] >>= average cores)
     where
-      f w_i _ = w_iplus1 solver sde rng undefined w_i deltat
+      eval rand w_i _ = w_iplus1 solver sde rand 0 w_i deltat
+      perThread = floor $ realToFrac simulations / realToFrac cores :: Int
       steps = case accuracy of
         End endTime -> floor $ endTime / deltat
         Steps n -> n
-      single _ = foldM' f start [1..steps]
-      average n solutions = return $ sum solutions / (realToFrac $ n)
+      thread rand = mapM (\_ -> foldM' (eval rand) start [1..steps]) [1..perThread]
+      average n solutions = return $ sum solutions / realToFrac n
       sum = foldl' (+) 0
 
   remove _ = id <$> return
 
-evaluate :: (MonadParallel m, SDEConstraint b c g m) => [DistributeInstance a m] -> SDEInstance b c g -> m SDEResult
+evaluate :: (P.MonadParallel m, SDEConstraint b c g m) => [DistributeInstance m] -> SDEInstance b c g m -> m SDEResult
 evaluate [] _ = return NotApplicable
-evaluate ((Distr method):[]) input =
+evaluate (Distr method : []) input =
   inject method input >>= execute method >>= remove method
-evaluate ((Distr method):tail) input =
-  inject method input >>= evaluate tail >>= remove method
+evaluate (Distr method : other) input =
+  inject method input >>= evaluate other >>= remove method
 
-foldM' :: (MonadParallel m) => (a -> b -> m a) -> a -> [b] -> m a
+foldM' :: (P.MonadParallel m) => (a -> b -> m a) -> a -> [b] -> m a
 foldM' _ z [] = return z
-foldM' f z (x:xs) = do
-  z' <- f z x
-  z' `seq` foldM' f z' xs
+foldM' func z (x:xs) = do
+  z' <- func z x
+  z' `seq` foldM' func z' xs
