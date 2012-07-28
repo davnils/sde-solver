@@ -13,6 +13,8 @@ class SDESolver a where
   solverName :: a -> String
 
 instance SDESolver EulerMaruyama where
+  {-# INLINE w_iplus1 #-}
+  {-# SPECIALIZE w_iplus1 :: EulerMaruyama -> BlackScholes -> M.GenIO -> Double -> Double -> Double -> IO Double#-}
   w_iplus1 _ sde rng t_i w_i deltat = getRand rng >>= \rand -> return $
                             w_i
                             + f sde t_i w_i * deltat

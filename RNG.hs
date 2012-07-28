@@ -21,7 +21,9 @@ instance RNGGen (M.Gen s) (ST s) where
   initialize = M.initialize . V.singleton . fromIntegral
 
 instance (M.GenIO ~ d) => RNGGen d IO where
+  {-# INLINE getRand #-}
   getRand = MD.normal 0 1
+  {-# INLINE initialize  #-}
   initialize = M.initialize . V.singleton . fromIntegral
 
 data PrimitiveGen = PG Int | StdPG R.StdGen
