@@ -1,9 +1,11 @@
-{-# LANGUAGE MultiParamTypeClasses, TypeSynonymInstances, FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses, TypeSynonymInstances, FlexibleInstances, BangPatterns #-}
 
 module SDESolver where
 
+import BlackScholes
 import RNG
 import SDE
+import qualified System.Random.MWC as M
 
 data EulerMaruyama = EulerMaruyama
 data Milstein = Milstein
@@ -15,7 +17,7 @@ class SDESolver a where
 instance SDESolver EulerMaruyama where
   {-# INLINE w_iplus1 #-}
   {-# SPECIALIZE w_iplus1 :: EulerMaruyama -> BlackScholes -> M.GenIO -> Double -> Double -> Double -> IO Double#-}
-  w_iplus1 _ sde rng t_i w_i deltat = getRand rng >>= \rand -> return $
+  w_iplus1 _ !sde !rng !t_i !w_i !deltat = getRand rng >>= \rand -> return $
                             w_i
                             + f sde t_i w_i * deltat
                             + g sde t_i w_i * deltaB rand
