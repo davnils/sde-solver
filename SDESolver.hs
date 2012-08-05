@@ -1,4 +1,5 @@
-{-# LANGUAGE MultiParamTypeClasses, TypeSynonymInstances, FlexibleInstances, BangPatterns #-}
+{-# LANGUAGE MultiParamTypeClasses, TypeSynonymInstances, FlexibleInstances,
+             BangPatterns, ConstraintKinds #-}
 
 module SDESolver where
 
@@ -11,12 +12,13 @@ data EulerMaruyama = EulerMaruyama
 data Milstein = Milstein
 
 class SDESolver a where
-  w_iplus1 :: (Monad m, SDE sde, RNGGen rng m) => a -> sde -> rng -> Double -> Double -> Double -> m Double
+  w_iplus1 :: (Monad m, SDE sde, RNGGen rng m p, Parameter p) =>
+    a -> sde p -> rng -> p -> p -> p -> m p
   solverName :: a -> String
 
 instance SDESolver EulerMaruyama where
   {-# INLINE w_iplus1 #-}
-  {-# SPECIALIZE w_iplus1 :: EulerMaruyama -> BlackScholes -> M.GenIO -> Double -> Double -> Double -> IO Double#-}
+  {-# SPECIALIZE w_iplus1 :: EulerMaruyama -> BlackScholes Double -> M.GenIO -> Double -> Double -> Double -> IO Double #-}
   w_iplus1 _ !sde !rng !t_i !w_i !deltat = getRand rng >>= \rand -> return $
                             w_i
                             + f sde t_i w_i * deltat

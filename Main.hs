@@ -16,4 +16,4 @@ main = do
   let [steps', simulations'] = map floor [steps, simulations]
   let rng = initialize
   cores <- getNumCapabilities
-  evaluate [Distr MPI, Distr $ Local cores] (BS rate vol, EulerMaruyama, rng, IP (Steps steps') start step simulations') >>= print
+  evaluate ([Distr MPI], Local cores) (BS rate vol, EulerMaruyama, rng, IP (Steps steps') start step simulations') >>= print

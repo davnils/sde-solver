@@ -1,8 +1,8 @@
+{-# LANGUAGE ConstraintKinds #-}
+
 module SDE where
 
-type TimeStep = Double
+type Parameter a = (Floating a, Fractional a, Num a)
 
 class SDE a where
-  f :: a -> TimeStep -> Double -> Double
-  g :: a -> TimeStep -> Double -> Double
-  partgoverparty :: a -> TimeStep -> Double -> Double
+  f,g,partgoverparty :: Parameter p => a p -> p -> p -> p

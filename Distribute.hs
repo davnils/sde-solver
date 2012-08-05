@@ -1,15 +1,16 @@
 {-# LANGUAGE MultiParamTypeClasses, ConstraintKinds, BangPatterns,
              ExistentialQuantification, FlexibleInstances, DeriveGeneric,
              DefaultSignatures, ScopedTypeVariables, TupleSections #-}
+
 module Distribute where
 
 -- TODO: (1) Fix t_i
---       (2) Check if the required bottom-execution can be encoded in the type system
 
 import Control.Applicative ((<$>))
 import Control.Monad.Identity hiding (mapM)
 import qualified Control.Monad.Parallel as P
 import Control.Parallel.MPI.Simple 
+import qualified Data.Array.Accelerate as Accelerate
 import Data.Foldable (fold, foldl')
 import Data.Monoid
 import Data.Serialize (Serialize(..))
@@ -36,7 +37,7 @@ instance Monoid SDEResult where
 
 instance Serialize SDEResult
 
-data Accuracy = End TimeStep
+data Accuracy = End Double
               | Steps Int
   deriving (Generic, Show)
 
@@ -55,13 +56,16 @@ data MPI = MPI
 data GPUAccelerate = GPUAccelerate
 data Local = Local Int
 
-type SDEConstraint b c g m = (SDE b, SDESolver c, RNGGen g m)
-type SDEInstance b c g m = (b, c, Maybe Int -> m g, InstanceParams)
+type SDEConstraint b c g m p = (SDE b, SDESolver c, Parameter p, RNGGen g m p)
+type SDEInstance b c g m p = (b p, c, Maybe Int -> m g, InstanceParams)
 
 class (P.MonadParallel m) => Distribute a m where
-  inject :: SDEConstraint b c g m => a -> SDEInstance b c g m -> m (SDEInstance b c g m)
-  execute :: SDEConstraint b c g m =>  a -> SDEInstance b c g m -> m SDEResult
+  inject :: SDEConstraint b c g m p =>
+    a -> SDEInstance b c g m p -> m (SDEInstance b c g m p)
   remove :: a -> SDEResult -> m SDEResult
+
+class (P.MonadParallel m) => Execute a m p where
+  execute :: SDEConstraint b c g m p =>  a -> SDEInstance b c g m p -> m SDEResult
 
 -- TODO: action size rank `finally` finalize
 instance Distribute MPI IO where
@@ -79,8 +83,6 @@ instance Distribute MPI IO where
 
       _ -> bcastRecv commWorld 0
 
-  execute _ _ = return NotApplicable
-
   remove _ localResult = do
     result <- commRank commWorld >>= retrieve
     finalize
@@ -92,8 +94,7 @@ instance Distribute MPI IO where
       retrieve _ =
         gatherSend commWorld 0 localResult >> return localResult
 
-instance (P.MonadParallel m) => Distribute Local m where
-  inject _ = id <$> return
+instance (P.MonadParallel m) => Execute Local m Double where
   execute (Local cores) (!sde, !solver, !rng, params) = 
     fold <$> P.mapM (const runThread) [1..cores]
     where
@@ -109,15 +110,14 @@ instance (P.MonadParallel m) => Distribute Local m where
       eval rand w_i _ = w_iplus1 solver sde rand 0 w_i (deltat params)
       average l = foldl' (+) 0 l / realToFrac (length l)
 
-  remove _ = id <$> return
+instance Execute GPUAccelerate IO (Accelerate.Exp Double) where
+  execute _ _ = undefined
 
-evaluate :: (P.MonadParallel m, SDEConstraint b c g m) => [DistributeInstance m] ->
-  SDEInstance b c g m -> m SDEResult
-evaluate [] _ = return NotApplicable
-evaluate (Distr method : []) input =
-  inject method input >>= execute method >>= remove method
-evaluate (Distr method : other) input =
-  inject method input >>= evaluate other >>= remove method
+evaluate :: (P.MonadParallel m, SDEConstraint b c g m p, Execute e m p) =>
+  ([DistributeInstance m], e) -> SDEInstance b c g m p -> m SDEResult
+evaluate ([], method) input = execute method input
+evaluate (Distr method : other, final) input =
+  inject method input >>= evaluate (other, final) >>= remove method
 
 foldM' :: (P.MonadParallel m) => (a -> b -> m a) -> a -> [b] -> m a
 foldM' _ z [] = return z
