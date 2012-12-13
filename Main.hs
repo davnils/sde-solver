@@ -3,7 +3,7 @@ module Main where
 import BlackScholes
 import Control.Applicative
 import Control.Monad.Identity
-import qualified Data.Array.Accelerate as Acc
+-- import qualified Data.Array.Accelerate as Acc
 import Distribute (DistributeInstance(..), Local(..), MPI(..),
                    Accuracy(..), evaluate, InstanceParams(IP))
 import GHC.Conc

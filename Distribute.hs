@@ -14,7 +14,8 @@ import qualified Data.Array.Accelerate.CUDA as CUDA -}
 import Data.Foldable (fold, foldl')
 import Data.Monoid
 import Data.Serialize (Serialize(..))
-import GHC.Float (float2Double)
+import qualified Data.Vector.Unboxed as V
+import Data.Vector.Serialize
 import GHC.Generics (Generic)
 import Prelude hiding (sum, init)
 import RNG
@@ -24,17 +25,20 @@ import SDESolver
 data DistributeInstance m = forall a. Distribute a m => Distr a
 
 data SDEResult = Scalar !Double !Int
-               | NotApplicable
+               | Distribution !(V.Vector Double)
   deriving (Generic, Show)
 
 instance Monoid SDEResult where
   mempty = Scalar 0 0
-  Scalar a n `mappend` Scalar b n' =
+  Scalar a n         `mappend` Scalar b n'        =
     Scalar (elemSum / fromIntegral s) s
-      where
-      s = n + n'
-      elemSum = a * fromIntegral n + b * fromIntegral n'
-  _ `mappend` _ = NotApplicable
+    where
+    s = n + n'
+    elemSum = a * fromIntegral n + b * fromIntegral n'
+
+  Distribution v     `mappend` Distribution v'    = Distribution $ v V.++ v'
+  Scalar _ _         `mappend` d@(Distribution _) = d
+  d@(Distribution _) `mappend` Scalar _ _         = d
 
 instance Serialize SDEResult
 
@@ -105,8 +109,8 @@ instance P.MonadParallel m => Execute Local m Double where
       End endTime -> floor $ endTime / deltat params
       Steps n -> n
 
-    runThread = (`Scalar` perThread) . average <$> (rng Nothing >>= thread)
-    thread rand = mapM (const $ threadEvaluation rand) [1..perThread]
+    runThread = Distribution <$> (rng Nothing >>= thread)
+    thread rand = V.mapM (const $ threadEvaluation rand) $ V.replicate perThread (0.0 :: Double)
     threadEvaluation rand = foldM' (eval rand) (start params) [1..steps]
     eval rand w_i _ = w_iplus1 solver sde rand 0 w_i (deltat params)
 
