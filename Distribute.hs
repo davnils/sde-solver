@@ -1,19 +1,20 @@
 {-# LANGUAGE MultiParamTypeClasses, ConstraintKinds, BangPatterns,
              ExistentialQuantification, FlexibleInstances, DeriveGeneric,
-             DefaultSignatures, ScopedTypeVariables, TupleSections #-}
+             DefaultSignatures, ScopedTypeVariables, TupleSections,
+             FlexibleContexts #-}
 
 module Distribute where
-
--- TODO: (1) Fix t_i
 
 import Control.Applicative ((<$>))
 import Control.Monad.Identity hiding (mapM)
 import qualified Control.Monad.Parallel as P
 import Control.Parallel.MPI.Simple 
-import qualified Data.Array.Accelerate as Accelerate
+{- import qualified Data.Array.Accelerate as Acc
+import qualified Data.Array.Accelerate.CUDA as CUDA -}
 import Data.Foldable (fold, foldl')
 import Data.Monoid
 import Data.Serialize (Serialize(..))
+import GHC.Float (float2Double)
 import GHC.Generics (Generic)
 import Prelude hiding (sum, init)
 import RNG
@@ -53,18 +54,18 @@ data InstanceParams = IP {
 instance Serialize InstanceParams
 
 data MPI = MPI
-data GPUAccelerate = GPUAccelerate
+-- data GPUAccelerate = GPUAccelerate
 data Local = Local Int
 
 type SDEConstraint b c g m p = (SDE b, SDESolver c, Parameter p, RNGGen g m p)
 type SDEInstance b c g m p = (b p, c, Maybe Int -> m g, InstanceParams)
 
-class (P.MonadParallel m) => Distribute a m where
+class Monad m => Distribute a m where
   inject :: SDEConstraint b c g m p =>
     a -> SDEInstance b c g m p -> m (SDEInstance b c g m p)
   remove :: a -> SDEResult -> m SDEResult
 
-class (P.MonadParallel m) => Execute a m p where
+class Execute a m p where
   execute :: SDEConstraint b c g m p =>  a -> SDEInstance b c g m p -> m SDEResult
 
 -- TODO: action size rank `finally` finalize
@@ -88,32 +89,66 @@ instance Distribute MPI IO where
     finalize
     return result
     where
-      retrieve 0 = do
-        clusterResult <- gatherRecv commWorld 0 localResult
-        return $ fold clusterResult
-      retrieve _ =
-        gatherSend commWorld 0 localResult >> return localResult
+    retrieve 0 = do
+      clusterResult <- gatherRecv commWorld 0 localResult
+      return $ fold clusterResult
+    retrieve _ =
+      gatherSend commWorld 0 localResult >> return localResult
 
-instance (P.MonadParallel m) => Execute Local m Double where
+instance P.MonadParallel m => Execute Local m Double where
   execute (Local cores) (!sde, !solver, !rng, params) = 
     fold <$> P.mapM (const runThread) [1..cores]
     where
-      perThread = ceiling $ (fromIntegral $ simulations params :: Double) /
-                             fromIntegral cores :: Int
-      steps = case accuracy params of
-        End endTime -> floor $ endTime / deltat params
-        Steps n -> n
+    perThread = ceiling $ (fromIntegral $ simulations params :: Double) /
+                           fromIntegral cores :: Int
+    steps = case accuracy params of
+      End endTime -> floor $ endTime / deltat params
+      Steps n -> n
 
-      runThread = (`Scalar` perThread) . average <$> (rng Nothing >>= thread)
-      thread rand = mapM (const $ threadEvaluation rand) [1..perThread]
-      threadEvaluation rand = foldM' (eval rand) (start params) [1..steps]
-      eval rand w_i _ = w_iplus1 solver sde rand 0 w_i (deltat params)
-      average l = foldl' (+) 0 l / realToFrac (length l)
+    runThread = (`Scalar` perThread) . average <$> (rng Nothing >>= thread)
+    thread rand = mapM (const $ threadEvaluation rand) [1..perThread]
+    threadEvaluation rand = foldM' (eval rand) (start params) [1..steps]
+    eval rand w_i _ = w_iplus1 solver sde rand 0 w_i (deltat params)
 
-instance Execute GPUAccelerate IO (Accelerate.Exp Double) where
-  execute _ _ = undefined
+average :: Fractional a => [a] -> a
+average l = foldl' (+) 0 l / realToFrac (length l)
 
-evaluate :: (P.MonadParallel m, SDEConstraint b c g m p, Execute e m p) =>
+{- instance Execute GPUAccelerate Identity (Acc.Exp Float) where
+  execute _ (!sde, !solver, !rng, params) = return $ (`Scalar` (simulations params)) . float2Double .  head . Acc.toList $ CUDA.run $ result
+    where
+    steps = case accuracy params of
+      End endTime -> floor $ endTime / deltat params
+      Steps n -> n
+
+    deltat' = Acc.constant $ deltat params
+    start' = Acc.constant $ start params
+    simulations' = Acc.constant $ 10 --simulations params
+    steps' = steps
+
+    seeds = Acc.enumFromN (Acc.index1 simulations') (0 :: Acc.Exp Float)
+    --flattened = Acc.enumFromN (Acc.index1 . Acc.constant $ (simulations params) * steps) 0
+    --segs = Acc.fill (Acc.index1 $ simulations') steps'
+
+    average' l = Acc.fold (\n acc -> acc + Acc.constant 5.0 {- (n/(Acc.fromIntegral $ Acc.size l))-}) (Acc.constant 0.0) l
+
+    -- easier to `fold like a fool`?
+    -- express computations a single large matrix:
+    -- r01 r02 r03 r04 r05 r06 r07 r08 r09
+    -- r11 r12 r13 r14 r15 r16 r17 r18 r19
+    -- each row describes a realisation, yeilding a matrix of dimension simulations x steps
+    -- the elements should be the random numbers drawn from N(0,1), but will be constant for now
+    -- the computation is done by folding each row with the underlying expression, 
+    -- and the resulting column vector with averaging.
+    --
+    -- structure:
+    -- flatten matrix into a single vector
+    -- perform segmented reduction with segment lengths of `steps` and reduce the result
+    realisations = seeds --Acc.foldSeg eval start' flattened segs
+
+    --eval w_i _ = runIdentity $ rng Nothing >>= \num -> w_iplus1 solver sde num 0 w_i deltat'
+    result = average' realisations -}
+
+evaluate :: (Monad m, SDEConstraint b c g m p, Execute e m p) =>
   ([DistributeInstance m], e) -> SDEInstance b c g m p -> m SDEResult
 evaluate ([], method) input = execute method input
 evaluate (Distr method : other, final) input =

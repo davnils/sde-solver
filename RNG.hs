@@ -5,8 +5,10 @@
 module RNG where
 
 import Control.Applicative
+import Control.Monad.Identity
 import Control.Monad.ST
 import Control.Monad.State
+import qualified Data.Array.Accelerate as Acc
 import Data.Maybe
 --import Data.Random.Normal
 import qualified Data.Vector.Unboxed as V
@@ -33,8 +35,12 @@ instance (M.GenIO ~ d) => RNGGen d IO Double where
   initialize (Just n) = M.initialize . V.singleton . fromIntegral $ n
   initialize Nothing = M.withSystemRandom . M.asGenIO $ return
 
-data PrimitiveGen = PG Int | StdPG R.StdGen
+data PrimitiveGen = ConstantRNG | PG Int | StdPG R.StdGen
   deriving Show
+
+instance RNGGen PrimitiveGen Identity (Acc.Exp Float) where
+  getRand _ = return 0
+  initialize _ = return ConstantRNG
 
 instance RNGGen PrimitiveGen IO Double where
   getRand (PG gen) = return $ realToFrac gen + 1 -- TODO Normal-bypass
