@@ -8,7 +8,7 @@ import Control.Applicative
 import Control.Monad.Identity
 import Control.Monad.ST
 import Control.Monad.State
-import qualified Data.Array.Accelerate as Acc
+--import qualified Data.Array.Accelerate as Acc
 import Data.Maybe
 --import Data.Random.Normal
 import qualified Data.Vector.Unboxed as V
@@ -26,7 +26,7 @@ class (Monad m, Functor m, Parameter p) => RNGGen g m p | g m -> p where
 
 instance RNGGen (M.Gen s) (ST s) Double where
   getRand = MD.normal 0 1
-  initialize = M.initialize . V.singleton . fromIntegral . fromMaybe defaultSeed
+  initialize s = M.initialize . V.singleton . fromIntegral $ fromMaybe defaultSeed s
 
 instance (M.GenIO ~ d) => RNGGen d IO Double where
   {-# INLINE getRand #-}
@@ -35,12 +35,12 @@ instance (M.GenIO ~ d) => RNGGen d IO Double where
   initialize (Just n) = M.initialize . V.singleton . fromIntegral $ n
   initialize Nothing = M.withSystemRandom . M.asGenIO $ return
 
-data PrimitiveGen = ConstantRNG | PG Int | StdPG R.StdGen
+data PrimitiveGen = {- ConstantRNG | -} PG Int | StdPG R.StdGen
   deriving Show
 
-instance RNGGen PrimitiveGen Identity (Acc.Exp Float) where
+{- instance RNGGen PrimitiveGen Identity (Acc.Exp Float) where
   getRand _ = return 0
-  initialize _ = return ConstantRNG
+  initialize _ = return ConstantRNG-}
 
 instance RNGGen PrimitiveGen IO Double where
   getRand (PG gen) = return $ realToFrac gen + 1 -- TODO Normal-bypass

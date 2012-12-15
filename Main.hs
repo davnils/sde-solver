@@ -1,21 +1,25 @@
 module Main where
 
-import BlackScholes
 import Control.Applicative
 import Control.Monad.Identity
--- import qualified Data.Array.Accelerate as Acc
+import Control.Parallel.Strategies
+-- import qualified Data.Array.Acceler as Acc
+import qualified Data.Vector.Unboxed as V
+import Data.Vector.Strategies
 import Distribute (DistributeInstance(..), Local(..), MPI(..),
-                   Accuracy(..), evaluate, InstanceParams(IP))
+                   Accuracy(..), evaluate, InstanceParams(IP), SDEResult(..))
+import GeometricBrownian
 import GHC.Conc
+import Langevin
 import RNG
 import SDESolver
 import System.Environment
 
 main :: IO ()
 main = do
-  (start:steps:step:rate:vol:simulations:[]) <- map read <$> getArgs :: IO [Double]
+  (start:steps:step:r:sigma:simulations:[]) <- map read <$> getArgs :: IO [Double]
   let [steps', simulations'] = map floor [steps, simulations]
   let rng = initialize
   cores <- getNumCapabilities
-  res <- evaluate ([], Local cores) (BS rate vol, EulerMaruyama, rng, IP (Steps steps') start step simulations')
-  print res
+  Distribution res <- evaluate ([], Local cores) (GB r sigma, Milstein, rng, IP (Steps steps') start step simulations')
+  writeFile "sde2" $ unlines $ map show $ V.toList res

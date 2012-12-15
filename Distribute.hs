@@ -158,7 +158,7 @@ evaluate ([], method) input = execute method input
 evaluate (Distr method : other, final) input =
   inject method input >>= evaluate (other, final) >>= remove method
 
-foldM' :: (P.MonadParallel m) => (a -> b -> m a) -> a -> [b] -> m a
+foldM' :: Monad m => (a -> b -> m a) -> a -> [b] -> m a
 foldM' _ z [] = return z
 foldM' func z (x:xs) = do
   z' <- func z x

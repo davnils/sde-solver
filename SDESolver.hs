@@ -3,7 +3,7 @@
 
 module SDESolver where
 
-import BlackScholes
+import GeometricBrownian
 import RNG
 import SDE
 import qualified System.Random.MWC as M
@@ -18,7 +18,7 @@ class SDESolver a where
 
 instance SDESolver EulerMaruyama where
   {-# INLINE w_iplus1 #-}
-  {-# SPECIALIZE w_iplus1 :: EulerMaruyama -> BlackScholes Double -> M.GenIO -> Double -> Double -> Double -> IO Double #-}
+  {-# SPECIALIZE w_iplus1 :: EulerMaruyama -> GeometricBrownian Double -> M.GenIO -> Double -> Double -> Double -> IO Double #-}
   w_iplus1 _ !sde !rng !t_i !w_i !deltat = getRand rng >>= \rand -> return $
                             w_i
                             + f sde t_i w_i * deltat
@@ -28,5 +28,12 @@ instance SDESolver EulerMaruyama where
   solverName _ = "Euler-Maruyama"
 
 instance SDESolver Milstein where
-  w_iplus1 = undefined
+  w_iplus1 _ !sde !rng !t_i !w_i !deltat = getRand rng >>= \rand -> return $
+                            w_i
+                            + f sde t_i w_i * deltat
+                            + g' * deltaB rand
+                            + g'/2 * (partgoverparty sde t_i w_i)  * ((deltaB rand)^^(2 :: Integer) - deltat)
+    where
+    deltaB r = sqrt deltat * r
+    g' = g sde t_i w_i
   solverName _ = "Milstein"
