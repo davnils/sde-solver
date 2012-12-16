@@ -32,7 +32,7 @@ instance SDESolver Milstein where
                             w_i
                             + f sde t_i w_i * deltat
                             + g' * deltaB rand
-                            + g'/2 * (partgoverparty sde t_i w_i)  * ((deltaB rand)^^(2 :: Integer) - deltat)
+                            + g'/2 * partgoverparty sde t_i w_i  * (deltaB rand^^(2 :: Integer) - deltat)
     where
     deltaB r = sqrt deltat * r
     g' = g sde t_i w_i

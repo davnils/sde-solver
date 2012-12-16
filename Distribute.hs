@@ -9,8 +9,6 @@ import Control.Applicative ((<$>))
 import Control.Monad.Identity hiding (mapM)
 import qualified Control.Monad.Parallel as P
 import Control.Parallel.MPI.Simple 
-{- import qualified Data.Array.Accelerate as Acc
-import qualified Data.Array.Accelerate.CUDA as CUDA -}
 import Data.Foldable (fold, foldl')
 import Data.Monoid
 import Data.Serialize (Serialize(..))
@@ -58,7 +56,6 @@ data InstanceParams = IP {
 instance Serialize InstanceParams
 
 data MPI = MPI
--- data GPUAccelerate = GPUAccelerate
 data Local = Local Int
 
 type SDEConstraint b c g m p = (SDE b, SDESolver c, Parameter p, RNGGen g m p)
@@ -117,7 +114,22 @@ instance P.MonadParallel m => Execute Local m Double where
 average :: Fractional a => [a] -> a
 average l = foldl' (+) 0 l / realToFrac (length l)
 
-{- instance Execute GPUAccelerate Identity (Acc.Exp Float) where
+evaluate :: (Monad m, SDEConstraint b c g m p, Execute e m p) =>
+  ([DistributeInstance m], e) -> SDEInstance b c g m p -> m SDEResult
+evaluate ([], method) input = execute method input
+evaluate (Distr method : other, final) input =
+  inject method input >>= evaluate (other, final) >>= remove method
+
+foldM' :: Monad m => (a -> b -> m a) -> a -> [b] -> m a
+foldM' _ z [] = return z
+foldM' func z (x:xs) = do
+  z' <- func z x
+  z' `seq` foldM' func z' xs
+
+{- import qualified Data.Array.Accelerate as Acc
+ data GPUAccelerate = GPUAccelerate
+import qualified Data.Array.Accelerate.CUDA as CUDA 
+ instance Execute GPUAccelerate Identity (Acc.Exp Float) where
   execute _ (!sde, !solver, !rng, params) = return $ (`Scalar` (simulations params)) . float2Double .  head . Acc.toList $ CUDA.run $ result
     where
     steps = case accuracy params of
@@ -151,15 +163,3 @@ average l = foldl' (+) 0 l / realToFrac (length l)
 
     --eval w_i _ = runIdentity $ rng Nothing >>= \num -> w_iplus1 solver sde num 0 w_i deltat'
     result = average' realisations -}
-
-evaluate :: (Monad m, SDEConstraint b c g m p, Execute e m p) =>
-  ([DistributeInstance m], e) -> SDEInstance b c g m p -> m SDEResult
-evaluate ([], method) input = execute method input
-evaluate (Distr method : other, final) input =
-  inject method input >>= evaluate (other, final) >>= remove method
-
-foldM' :: Monad m => (a -> b -> m a) -> a -> [b] -> m a
-foldM' _ z [] = return z
-foldM' func z (x:xs) = do
-  z' <- func z x
-  z' `seq` foldM' func z' xs
