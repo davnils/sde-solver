@@ -1,13 +1,16 @@
 {-# LANGUAGE ConstraintKinds #-}
 
-module DistrSDE (distribute, local, withSolver, writeResult, SDEResult(..), Milstein(..), EulerMaruyama(..)) where
+module Numeric.DSDE
+(distribute, local, withSolver, writeResult,
+SDEResult(..), Milstein(..), EulerMaruyama(..))
+where
 
 import qualified Data.Vector.Unboxed as V
-import Distribute
+import Numeric.DSDE.Distribute
 import GHC.Conc
-import RNG
-import SDE
-import SDESolver
+import Numeric.DSDE.RNG
+import Numeric.DSDE.SDE
+import Numeric.DSDE.SDESolver
 import System.IO
 
 distribute, local :: (SDE sde, SDESolver solver) => sde Double -> Double -> Double -> Double -> Int -> solver -> IO SDEResult

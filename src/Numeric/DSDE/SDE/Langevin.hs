@@ -1,8 +1,8 @@
 {-# Language BangPatterns #-}
 
-module Langevin where
+module Numeric.DSDE.SDE.Langevin where
 
-import SDE
+import Numeric.DSDE.SDE
 
 data Langevin p = Langevin !p !p
 

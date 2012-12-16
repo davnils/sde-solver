@@ -1,11 +1,11 @@
 {-# LANGUAGE MultiParamTypeClasses, TypeSynonymInstances, FlexibleInstances,
              BangPatterns, ConstraintKinds #-}
 
-module SDESolver where
+module Numeric.DSDE.SDESolver where
 
-import GeometricBrownian
-import RNG
-import SDE
+import Numeric.DSDE.SDE.GeometricBrownian
+import Numeric.DSDE.RNG
+import Numeric.DSDE.SDE
 import qualified System.Random.MWC as M
 
 data EulerMaruyama = EulerMaruyama

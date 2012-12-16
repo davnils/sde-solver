@@ -1,8 +1,8 @@
 {-# Language BangPatterns #-}
 
-module GeometricBrownian where
+module Numeric.DSDE.SDE.GeometricBrownian where
 
-import SDE
+import Numeric.DSDE.SDE
 
 data GeometricBrownian p = GB !p !p
 

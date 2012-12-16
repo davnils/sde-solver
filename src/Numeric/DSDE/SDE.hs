@@ -1,6 +1,6 @@
 {-# LANGUAGE ConstraintKinds #-}
 
-module SDE where
+module Numeric.DSDE.SDE where
 
 type Parameter a = (Floating a, Fractional a, Num a)
 

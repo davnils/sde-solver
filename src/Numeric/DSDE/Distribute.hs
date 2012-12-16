@@ -3,7 +3,7 @@
              DefaultSignatures, ScopedTypeVariables, TupleSections,
              FlexibleContexts #-}
 
-module Distribute where
+module Numeric.DSDE.Distribute where
 
 import Control.Applicative ((<$>))
 import Control.Monad.Identity hiding (mapM)
@@ -16,9 +16,9 @@ import qualified Data.Vector.Unboxed as V
 import Data.Vector.Serialize
 import GHC.Generics (Generic)
 import Prelude hiding (sum, init)
-import RNG
-import SDE
-import SDESolver
+import Numeric.DSDE.RNG
+import Numeric.DSDE.SDE
+import Numeric.DSDE.SDESolver
 
 data DistributeInstance m = forall a. Distribute a m => Distr a
 

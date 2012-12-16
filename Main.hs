@@ -1,7 +1,7 @@
 module Main where
 
 import Control.Applicative
-import DistrSDE
+import DSDE
 import Langevin
 import System.Environment
 
