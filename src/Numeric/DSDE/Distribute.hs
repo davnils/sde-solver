@@ -6,8 +6,9 @@
 module Numeric.DSDE.Distribute where
 
 import Control.Applicative ((<$>))
+import Control.Concurrent
+import Control.Concurrent.MVar
 import Control.Monad.Identity hiding (mapM)
-import qualified Control.Monad.Parallel as P
 import Control.Parallel.MPI.Simple 
 import Data.Foldable (fold, foldl')
 import Data.Monoid
@@ -15,7 +16,7 @@ import Data.Serialize (Serialize(..))
 import qualified Data.Vector.Unboxed as V
 import Data.Vector.Serialize
 import GHC.Generics (Generic)
-import Prelude hiding (sum, init)
+import Prelude hiding (sum, init, map)
 import Numeric.DSDE.RNG
 import Numeric.DSDE.SDE
 import Numeric.DSDE.SDESolver
@@ -69,6 +70,17 @@ class Monad m => Distribute a m where
 class Execute a m p where
   execute :: SDEConstraint b c g m p =>  a -> SDEInstance b c g m p -> m SDEResult
 
+class Mappable m where
+  map :: (a -> m b) -> [a] -> m [b] 
+
+instance Mappable IO where
+  map f l = mapM splitWork l >>= mapM takeMVar
+    where
+    splitWork e = do
+      var <- newEmptyMVar
+      forkIO $ f e >>= putMVar var
+      return var
+
 -- TODO: action size rank `finally` finalize
 instance Distribute MPI IO where
   inject _ (sde, solver, rng, params) = do
@@ -96,9 +108,9 @@ instance Distribute MPI IO where
     retrieve _ =
       gatherSend commWorld 0 localResult >> return localResult
 
-instance P.MonadParallel m => Execute Local m Double where
+instance Mappable m => Execute Local m Double where
   execute (Local cores) (!sde, !solver, !rng, params) = 
-    fold <$> P.mapM (const runThread) [1..cores]
+    fold <$> map (const runThread) [1..cores]
     where
     perThread = ceiling $ (fromIntegral $ simulations params :: Double) /
                            fromIntegral cores :: Int
