@@ -9,6 +9,10 @@ import Control.Applicative ((<$>))
 import Control.Concurrent
 import Control.Concurrent.MVar
 import Control.Monad.Identity hiding (mapM)
+import Control.Monad.State
+-- import Control.Monad.Par
+import Control.Parallel
+-- import Control.Parallel.Strategies
 import Control.Parallel.MPI.Simple 
 import Data.Foldable (fold, foldl')
 import Data.Monoid
@@ -16,10 +20,10 @@ import Data.Serialize (Serialize(..))
 import qualified Data.Vector.Unboxed as V
 import Data.Vector.Serialize
 import GHC.Generics (Generic)
-import Prelude hiding (sum, init, map)
 import Numeric.DSDE.RNG
 import Numeric.DSDE.SDE
 import Numeric.DSDE.SDESolver
+import Prelude hiding (sum, init, map)
 
 data DistributeInstance m = forall a. Distribute a m => Distr a
 
@@ -70,16 +74,29 @@ class Monad m => Distribute a m where
 class Execute a m p where
   execute :: SDEConstraint b c g m p =>  a -> SDEInstance b c g m p -> m SDEResult
 
-class Mappable m where
-  map :: (a -> m b) -> [a] -> m [b] 
+class Mappable m p where
+  map' :: RNGGen g m p => (Int, Maybe Int -> m g) -> (g -> m b) -> [a] -> m [b] 
 
-instance Mappable IO where
-  map f l = mapM splitWork l >>= mapM takeMVar
+instance Mappable IO Double where
+  map' (seed, rng) f l = do
+    rand <- rng (Just seed)
+    seeds <- mapM (\_ -> (Just . round <$> getRand rand) >>= rng) l
+    mapM splitWork seeds >>= mapM takeMVar
     where
-    splitWork e = do
+    splitWork rand = do
       var <- newEmptyMVar
-      forkIO $ f e >>= putMVar var
+      forkIO $ f rand >>= putMVar var
       return var
+
+instance RealFrac a => Mappable (State s) a where
+  map' (seed, rng) f l = (go f seed l >>= sequence)
+    where
+    go f _ [] = return []
+    go f s (_:t) = do
+      worker <- rng (Just s)
+      s' <- round <$> getRand worker
+      rest <- go f s' t
+      return $ f worker `par` f worker : rest
 
 -- TODO: action size rank `finally` finalize
 instance Distribute MPI IO where
@@ -108,9 +125,10 @@ instance Distribute MPI IO where
     retrieve _ =
       gatherSend commWorld 0 localResult >> return localResult
 
-instance Mappable m => Execute Local m Double where
-  execute (Local cores) (!sde, !solver, !rng, params) = 
-    fold <$> map (const runThread) [1..cores]
+instance Mappable m Double => Execute Local m Double where
+  execute (Local cores) (!sde, !solver, !rng, params) = do
+    seedRNG <- round <$> (rng Nothing >>= getRand)
+    fold <$> map' (seedRNG, rng) runThread [1..cores]
     where
     perThread = ceiling $ (fromIntegral $ simulations params :: Double) /
                            fromIntegral cores :: Int
@@ -118,7 +136,7 @@ instance Mappable m => Execute Local m Double where
       End endTime -> floor $ endTime / deltat params
       Steps n -> n
 
-    runThread = Distribution <$> (rng Nothing >>= thread)
+    runThread rng = Distribution <$> thread rng
     thread rand = V.mapM (const $ threadEvaluation rand) $ V.replicate perThread (0.0 :: Double)
     threadEvaluation rand = foldM' (eval rand) (start params) [1..steps]
     eval rand w_i _ = w_iplus1 solver sde rand 0 w_i (deltat params)

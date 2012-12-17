@@ -14,6 +14,7 @@ description:
   .
   The main interface is accessible through Numeric.DSDE which provides various way of solving generic problems.
   This module supports either local or distributed calculations in the IO monad and gathering the results as a distribution.
+  Under the surface there is also a working pure implementation for monadic environments, using a pure mersenne twister PRNG.
   .
   Internally there are several abstractions used when dealing with each component building up a solution.
   Given some SDE and SDESolver instances, it is also required to some have PRNG providing normally distributed numbers.
@@ -37,16 +38,19 @@ library
   
   build-depends:
     base >=4.5 && < 5,
-    vector >=0.10 && < 1,
-    mtl >=2.1 && < 3,
-    haskell-mpi >=1.2 && < 2,
     cereal >=0.3 && < 1,
     cereal-vector >=0.2 && < 1,
     ghc-prim >=0.2 && < 1,
+    haskell-mpi >=1.2 && < 2,
+    mersenne-random-pure64 >= 0.2.0.3 && < 1,
+    mtl >=2.1 && < 3,
     mwc-random >=0.12 && < 1,
-    random >=1.0.1.1 && < 2
+    normaldistribution >= 1.1.0.3 && < 2,
+    parallel >= 3.2 && < 4,
+    vector >=0.10 && < 1
   
   hs-source-dirs:      src
+  ghc-options:         -O2
 
 
 source-repository head
