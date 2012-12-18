@@ -4,6 +4,7 @@ module Numeric.DSDE.SDE.Langevin where
 
 import Numeric.DSDE.SDE
 
+-- | SDE instance of the Langevin equation with rate r and diffusion sigma.
 data Langevin p = Langevin !p !p
 
 instance SDE Langevin where

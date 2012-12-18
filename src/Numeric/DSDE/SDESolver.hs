@@ -8,9 +8,14 @@ import Numeric.DSDE.RNG
 import Numeric.DSDE.SDE
 import qualified System.Random.MWC as M
 
+-- | The Euler-Maruyama solving method. Order 1/2.
 data EulerMaruyama = EulerMaruyama
+
+-- | The Milstein solving method. Order 1.
 data Milstein = Milstein
 
+-- | Type class describing a method of solving SDE problems.
+--    Defined by the next value produced in a solving sequence.
 class SDESolver a where
   w_iplus1 :: (Monad m, SDE sde, RNGGen rng m p, Parameter p) =>
     a -> sde p -> rng -> p -> p -> p -> m p

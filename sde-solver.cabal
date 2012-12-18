@@ -4,21 +4,21 @@ version:             0.1.0.0
 synopsis:            Distributed SDE solver
 description:         
   This package contains utilities for solving SDE instances in various ways.
-  Basically a SDE instance is solved using some SDESolver working with some distribution mechanism.
+  Basically an 'SDE' instance is solved using some 'SDESolver' working with some distribution mechanism.
   Results are gathered at the end point of the specified interval.
   .
-  Included in the package are ways of doing distributed calculations over a MPI cluster,
+  Included in the package are ways of doing distributed calculations over an MPI cluster,
   or optionally only using the local solver with built in parallelization.
-  Two examples are given in the Numer.DSDE.SDE module; geometric brownian motion and the Langevin equation.
-  See the haddock documentation of the DSDE module for examples.
+  Two SDE instances have been implemented; geometric brownian motion and the Langevin equation,
+  see the haddock documentation for an example.
   .
-  The main interface is accessible through Numeric.DSDE which provides various way of solving generic problems.
+  The main interface is accessible through "Numeric.DSDE" which provides various way of solving generic problems.
   This module supports either local or distributed calculations in the IO monad and gathering the results as a distribution.
-  Under the surface there is also a working pure implementation for monadic environments, using a pure mersenne twister PRNG.
+  Under the surface there is also a working pure implementation for monadic environments, using a pure Mersenne twister PRNG.
   .
   Internally there are several abstractions used when dealing with each component building up a solution.
-  Given some SDE and SDESolver instances, it is also required to some have PRNG providing normally distributed numbers.
-  This has been implemented over some specific monads and only results of type Double.
+  Given some 'SDE' and 'SDESolver' instances, it is also required to have some PRNG providing normally distributed numbers.
+  This has been implemented over some specific monads and only results of type 'Double'.
   All of the internal components are written with polymorphism in mind, acting over some monad instance and generic result types in all cases.
 
 homepage:            https://github.com/davnils/sde-solver
@@ -29,7 +29,7 @@ license-file:        LICENSE
 author:              David Nilsson
 maintainer:          nilsson.dd+code@gmail.com
 
-category:            Numerical
+category:            Math, Numerical
 build-type:          Simple
 cabal-version:       >=1.8
 

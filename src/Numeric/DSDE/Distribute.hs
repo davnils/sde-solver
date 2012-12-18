@@ -10,9 +10,7 @@ import Control.Concurrent
 import Control.Concurrent.MVar
 import Control.Monad.Identity hiding (mapM)
 import Control.Monad.State
--- import Control.Monad.Par
 import Control.Parallel
--- import Control.Parallel.Strategies
 import Control.Parallel.MPI.Simple 
 import Data.Foldable (fold, foldl')
 import Data.Monoid
@@ -25,12 +23,15 @@ import Numeric.DSDE.SDE
 import Numeric.DSDE.SDESolver
 import Prelude hiding (sum, init, map)
 
+-- | Wrapper used by all distributors supplied to the 'evaluate' function.
 data DistributeInstance m = forall a. Distribute a m => Distr a
 
-data SDEResult = Scalar !Double !Int
-               | Distribution !(V.Vector Double)
+-- | Container describing the result produced by an SDE solution.
+data SDEResult = Scalar !Double !Int             -- ^ Average of all end-point values, with the number of samples recorded.
+               | Distribution !(V.Vector Double) -- ^ All end-point samples stored as an unboxed vector.
   deriving (Generic, Show)
 
+-- | Monoid instance used when folding results from multiple sources.
 instance Monoid SDEResult where
   mempty = Scalar 0 0
   Scalar a n         `mappend` Scalar b n'        =
@@ -43,14 +44,18 @@ instance Monoid SDEResult where
   Scalar _ _         `mappend` d@(Distribution _) = d
   d@(Distribution _) `mappend` Scalar _ _         = d
 
+-- | Serialize instance used by MPI.
 instance Serialize SDEResult
 
+-- | Internal abstraction over the choice of specifying either the interval length or the number of steps.
 data Accuracy = End Double
               | Steps Int
   deriving (Generic, Show)
 
+-- | Serialize instance used by MPI.
 instance Serialize Accuracy
 
+-- | Set of parameters supplied to solve an SDE problem.
 data InstanceParams = IP {
   accuracy :: !Accuracy,
   start :: !Double,
@@ -58,25 +63,36 @@ data InstanceParams = IP {
   simulations :: !Int }
   deriving (Generic, Show)
 
+-- | Serialize instance used by MPI.
 instance Serialize InstanceParams
 
+-- | MPI cluster distributor.
 data MPI = MPI
+
+-- | Local evaluation using GHC threads
 data Local = Local Int
 
 type SDEConstraint b c g m p = (SDE b, SDESolver c, Parameter p, RNGGen g m p)
 type SDEInstance b c g m p = (b p, c, Maybe Int -> m g, InstanceParams)
 
+-- | Type class indicating the ability to distribute data in some way.
+--   Several distributors may be chained.
 class Monad m => Distribute a m where
+  -- | Inject an SDE instance into the context.
   inject :: SDEConstraint b c g m p =>
     a -> SDEInstance b c g m p -> m (SDEInstance b c g m p)
+  -- | Remove an SDE result from the context.
   remove :: a -> SDEResult -> m SDEResult
 
+-- | Type class indicating ability to solve an SDE problem.
 class Execute a m p where
   execute :: SDEConstraint b c g m p =>  a -> SDEInstance b c g m p -> m SDEResult
 
+-- | Type class indicating ability to perform a set of actions in an efficient way.
 class Mappable m p where
   map' :: RNGGen g m p => (Int, Maybe Int -> m g) -> (g -> m b) -> [a] -> m [b] 
 
+-- | Mappable instance for the IO monad. Work is divided using forkIO.
 instance Mappable IO Double where
   map' (seed, rng) f l = do
     rand <- rng (Just seed)
@@ -88,6 +104,9 @@ instance Mappable IO Double where
       forkIO $ f rand >>= putMVar var
       return var
 
+-- | Mappable instance for the pure State monad, uses 'par' annotations.
+--   This does not perform well in general and needs to be optimized to
+--   compete with the monadic IO instance.
 instance RealFrac a => Mappable (State s) a where
   map' (seed, rng) f l = (go f seed l >>= sequence)
     where
@@ -98,7 +117,7 @@ instance RealFrac a => Mappable (State s) a where
       rest <- go f s' t
       return $ f worker `par` f worker : rest
 
--- TODO: action size rank `finally` finalize
+-- | Distribute instance over MPI which defines data transportation.
 instance Distribute MPI IO where
   inject _ (sde, solver, rng, params) = do
     init
@@ -125,6 +144,7 @@ instance Distribute MPI IO where
     retrieve _ =
       gatherSend commWorld 0 localResult >> return localResult
 
+-- | Generic execute instances over any mappable monad 'm'.
 instance Mappable m Double => Execute Local m Double where
   execute (Local cores) (!sde, !solver, !rng, params) = do
     seedRNG <- round <$> (rng Nothing >>= getRand)
@@ -139,57 +159,18 @@ instance Mappable m Double => Execute Local m Double where
     runThread rng = Distribution <$> thread rng
     thread rand = V.mapM (const $ threadEvaluation rand) $ V.replicate perThread (0.0 :: Double)
     threadEvaluation rand = foldM' (eval rand) (start params) [1..steps]
-    eval rand w_i _ = w_iplus1 solver sde rand 0 w_i (deltat params)
+    eval rand w_i step = w_iplus1 solver sde rand (fromIntegral step * deltat params) w_i (deltat params)
 
-average :: Fractional a => [a] -> a
-average l = foldl' (+) 0 l / realToFrac (length l)
-
+-- | Evaluate the SDE using the supplied distributors and execution method.
 evaluate :: (Monad m, SDEConstraint b c g m p, Execute e m p) =>
   ([DistributeInstance m], e) -> SDEInstance b c g m p -> m SDEResult
 evaluate ([], method) input = execute method input
 evaluate (Distr method : other, final) input =
   inject method input >>= evaluate (other, final) >>= remove method
 
+-- | Monadic strict fold.
 foldM' :: Monad m => (a -> b -> m a) -> a -> [b] -> m a
 foldM' _ z [] = return z
 foldM' func z (x:xs) = do
   z' <- func z x
   z' `seq` foldM' func z' xs
-
-{- import qualified Data.Array.Accelerate as Acc
- data GPUAccelerate = GPUAccelerate
-import qualified Data.Array.Accelerate.CUDA as CUDA 
- instance Execute GPUAccelerate Identity (Acc.Exp Float) where
-  execute _ (!sde, !solver, !rng, params) = return $ (`Scalar` (simulations params)) . float2Double .  head . Acc.toList $ CUDA.run $ result
-    where
-    steps = case accuracy params of
-      End endTime -> floor $ endTime / deltat params
-      Steps n -> n
-
-    deltat' = Acc.constant $ deltat params
-    start' = Acc.constant $ start params
-    simulations' = Acc.constant $ 10 --simulations params
-    steps' = steps
-
-    seeds = Acc.enumFromN (Acc.index1 simulations') (0 :: Acc.Exp Float)
-    --flattened = Acc.enumFromN (Acc.index1 . Acc.constant $ (simulations params) * steps) 0
-    --segs = Acc.fill (Acc.index1 $ simulations') steps'
-
-    average' l = Acc.fold (\n acc -> acc + Acc.constant 5.0 {- (n/(Acc.fromIntegral $ Acc.size l))-}) (Acc.constant 0.0) l
-
-    -- easier to `fold like a fool`?
-    -- express computations a single large matrix:
-    -- r01 r02 r03 r04 r05 r06 r07 r08 r09
-    -- r11 r12 r13 r14 r15 r16 r17 r18 r19
-    -- each row describes a realisation, yeilding a matrix of dimension simulations x steps
-    -- the elements should be the random numbers drawn from N(0,1), but will be constant for now
-    -- the computation is done by folding each row with the underlying expression, 
-    -- and the resulting column vector with averaging.
-    --
-    -- structure:
-    -- flatten matrix into a single vector
-    -- perform segmented reduction with segment lengths of `steps` and reduce the result
-    realisations = seeds --Acc.foldSeg eval start' flattened segs
-
-    --eval w_i _ = runIdentity $ rng Nothing >>= \num -> w_iplus1 solver sde num 0 w_i deltat'
-    result = average' realisations -}

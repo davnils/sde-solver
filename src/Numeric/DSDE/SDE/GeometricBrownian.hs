@@ -4,6 +4,7 @@ module Numeric.DSDE.SDE.GeometricBrownian where
 
 import Numeric.DSDE.SDE
 
+-- | Geometric Brownian motion with rate r and diffusion sigma.
 data GeometricBrownian p = GB !p !p
 
 instance SDE GeometricBrownian where
